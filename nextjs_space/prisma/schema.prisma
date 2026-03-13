@@ -1,0 +1,216 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    output = "/home/ubuntu/crm_kanban/nextjs_space/node_modules/.prisma/client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+// Kanban Boards (Contacts and Tasks)
+model Board {
+  id          String   @id @default(cuid())
+  title       String
+  type        String   // 'contacts' or 'tasks'
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lists       List[]
+}
+
+// Lists/Columns in Kanban
+model List {
+  id          String   @id @default(cuid())
+  title       String
+  order       Int      @default(0)
+  boardId     String
+  board       Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards       Card[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([boardId])
+}
+
+// Cards in Lists
+model Card {
+  id                String             @id @default(cuid())
+  title             String
+  description       String?            @db.Text
+  order             Int                @default(0)
+  listId            String
+  list              List               @relation(fields: [listId], references: [id], onDelete: Cascade)
+  startDate         DateTime?
+  dueDate           DateTime?
+  coverImageUrl     String?
+  contactId         String?
+  contact           Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  dealId            String?
+  deal              Deal?              @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  labels            Label[]
+  checklists        Checklist[]
+  comments          Comment[]
+  attachments       Attachment[]
+  scheduledMessages ScheduledMessage[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([listId])
+  @@index([contactId])
+  @@index([dealId])
+}
+
+// Labels/Tags
+model Label {
+  id        String   @id @default(cuid())
+  name      String
+  color     String   // hex color
+  cards     Card[]
+  contacts  Contact[]
+  deals     Deal[]
+  createdAt DateTime @default(now())
+}
+
+// Checklists
+model Checklist {
+  id        String         @id @default(cuid())
+  title     String
+  order     Int            @default(0)
+  cardId    String
+  card      Card           @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  items     ChecklistItem[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([cardId])
+}
+
+// Checklist Items
+model ChecklistItem {
+  id          String    @id @default(cuid())
+  text        String
+  completed   Boolean   @default(false)
+  order       Int       @default(0)
+  checklistId String
+  checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([checklistId])
+}
+
+// Comments
+model Comment {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  cardId    String
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([cardId])
+}
+
+// Attachments
+model Attachment {
+  id                String   @id @default(cuid())
+  name              String
+  url               String?  // For external links
+  cloudStoragePath  String?  // For uploaded files
+  isPublic          Boolean  @default(false)
+  fileType          String?  // image, document, link, etc
+  fileSize          Int?     // in bytes
+  cardId            String
+  card              Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+
+  @@index([cardId])
+}
+
+// Contacts
+model Contact {
+  id          String     @id @default(cuid())
+  name        String
+  email       String?
+  phone       String?
+  company     String?
+  notes       String?    @db.Text
+  labels      Label[]
+  deals       Deal[]
+  activities  Activity[]
+  cards       Card[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+// Deals/Negócios
+model Deal {
+  id              String     @id @default(cuid())
+  title           String
+  value           Float      @default(0)
+  status          String     // lead, in_progress, won, lost
+  expectedCloseDate DateTime?
+  description     String?    @db.Text
+  contactId       String?
+  contact         Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  labels          Label[]
+  activities      Activity[]
+  cards           Card[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([contactId])
+}
+
+// Activities
+model Activity {
+  id          String   @id @default(cuid())
+  type        String   // call, email, meeting, task, note
+  title       String
+  description String?  @db.Text
+  scheduledAt DateTime?
+  completedAt DateTime?
+  contactId   String?
+  contact     Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  dealId      String?
+  deal        Deal?    @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([contactId])
+  @@index([dealId])
+}
+
+// Scheduled Messages
+model ScheduledMessage {
+  id                String   @id @default(cuid())
+  message           String   @db.Text
+  scheduledAt       DateTime
+  cardId            String
+  card              Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  sent              Boolean  @default(false)
+  // Campos para mídia
+  mediaUrl          String?  // URL da mídia (imagem, vídeo, gif, banner)
+  mediaType         String?  // image, video, gif, banner, document
+  mediaName         String?  // Nome original do arquivo
+  cloudStoragePath  String?  // Caminho no S3
+  isPublic          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([cardId])
+  @@index([scheduledAt])
+}
+
+// Dashboard Widget Settings
+model DashboardWidget {
+  id        String   @id @default(cuid())
+  widgetKey String   @unique // e.g., 'totalContacts', 'openDeals', 'funnel', etc.
+  title     String
+  order     Int      @default(0)
+  column    Int      @default(0) // 0, 1, 2 for grid layout
+  visible   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
